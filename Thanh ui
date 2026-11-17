@@ -1,4 +1,4 @@
--- THANH UI | Thư viện UI thuần | Icon ID + Resize Grip + Cài đặt đầy đủ | Không dùng ký tự đặc biệt trong UI
+-- THANH UI | Icon ID + Resize Grip + Cài đặt Popup + Sửa lỗi thông báo
 local Thanh = {}
 
 local Players = game:GetService("Players")
@@ -9,7 +9,6 @@ local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Thay số id này bằng id icon của mày
 local ICONS = {
   Home = 7743871480,
   Play = 7743871480,
@@ -118,7 +117,6 @@ function Thanh:CreateWindow(opts)
   local Root = New("Frame", {Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(WW, WH), BackgroundTransparency = 1}, Gui)
   local Content = New("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(WW, WH), BackgroundTransparency = 1}, Root)
   local ContentCorner = Corner(Content, 16)
-
   for i = 5, 1, -1 do
     local sh = New("Frame", {Position = UDim2.fromOffset(-i * 4, i * 2), Size = UDim2.new(1, i * 8, 1, i * 8), BackgroundColor3 = Color3.new(), BackgroundTransparency = 0.94, BorderSizePixel = 0, ZIndex = 0}, Content)
     Corner(sh, 10 + i * 2)
@@ -130,7 +128,6 @@ function Thanh:CreateWindow(opts)
   local BgGrad = New("Frame", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 0.55, BorderSizePixel = 0, ZIndex = 0}, Surface)
   New("UIGradient", {Rotation = 135, Color = ColorSequence.new({ColorSequenceKeypoint.new(0, T.Accent), ColorSequenceKeypoint.new(0.4, T.Bg), ColorSequenceKeypoint.new(1, Color3.fromRGB(3, 8, 22))})}, BgGrad)
 
-  -- Viền chuyển động
   local BeamGroup = New("Frame", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 20}, Content)
   Corner(BeamGroup, 16)
   local BeamGrads = {}
@@ -142,7 +139,6 @@ function Thanh:CreateWindow(opts)
     table.insert(BeamGrads, g)
   end
 
-  -- Hạt nổi + Thiên thạch
   local ParticleLayer = New("Frame", {BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 1}, Surface)
   local MeteorLayer = New("Frame", {BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 2}, Surface)
   local Rnd = Random.new(tick())
@@ -170,7 +166,6 @@ function Thanh:CreateWindow(opts)
     end
   end)
 
-  -- Header
   local Header = New("Frame", {BackgroundTransparency = 1, Size = UDim2.fromOffset(WW, 72), ZIndex = 5, ClipsDescendants = true}, Surface)
   local HeaderShine = AddShine(Header, 2.6)
   local Title = New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(22, 10), Size = UDim2.fromOffset(400, 38), Font = Enum.Font.GothamBlack, TextSize = 30, Text = opts.Name or "THANH", TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6}, Header)
@@ -178,8 +173,8 @@ function Thanh:CreateWindow(opts)
   New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(24, 46), Size = UDim2.fromOffset(400, 18), Font = Enum.Font.Gotham, TextSize = 11, Text = opts.Subtitle or "THANH OPERATIONS", TextColor3 = T.Muted, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6}, Header)
   local Drag = New("Frame", {BackgroundTransparency = 1, Active = true, Size = UDim2.fromOffset(WW - 180, 72), ZIndex = 4}, Header)
 
-  local function TopBtn(x, iconId, cb)
-    local b = New("TextButton", {Text = "", AutoButtonColor = false, Position = UDim2.fromOffset(x, 18), Size = UDim2.fromOffset(36, 36), BackgroundColor3 = T.Field, BackgroundTransparency = 0.4, BorderSizePixel = 0, ZIndex = 20}, Header)
+  local function TopBtn(parent, x, iconId, cb)
+    local b = New("TextButton", {Text = "", AutoButtonColor = false, Position = UDim2.fromOffset(x, 18), Size = UDim2.fromOffset(36, 36), BackgroundColor3 = T.Field, BackgroundTransparency = 0.4, BorderSizePixel = 0, ZIndex = 20}, parent)
     Corner(b, 10) Stroke(b, T.Line, 1, 0.3)
     MakeIcon(b, iconId, 9, 9, 18, T.Text, 21)
     b.MouseEnter:Connect(function() Tween(b, {BackgroundTransparency = 0.15}) end)
@@ -196,20 +191,56 @@ function Thanh:CreateWindow(opts)
   local minBtn, closeBtn, settingsBtn
   local FpsLabel = nil
 
+  -- ===== THÔNG BÁO ĐÃ SỬA: xếp chồng, giới hạn 4 cái, không spam =====
+  local NotifHolder = New("Frame", {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(320, 600), BackgroundTransparency = 1, ZIndex = 250}, Gui)
+  local ActiveNotifs = {}
+  local function LayoutNotifs()
+    for i, n in ipairs(ActiveNotifs) do
+      if n.Parent then Tween(n, {Position = UDim2.fromOffset(0, (i - 1) * 84)}, 0.22) end
+    end
+  end
+  function Window:Notify(title, msg, dur)
+    if not Window.NotificationsEnabled then return end
+    if not Gui.Parent then return end
+    if #ActiveNotifs >= 4 then
+      local old = table.remove(ActiveNotifs, 1)
+      if old and old.Parent then old:Destroy() end
+      LayoutNotifs()
+    end
+    local idx = #ActiveNotifs + 1
+    local n = New("Frame", {Position = UDim2.fromOffset(340, (idx - 1) * 84), Size = UDim2.fromOffset(320, 76), BackgroundColor3 = T.Card, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true}, NotifHolder)
+    Corner(n, 10) Stroke(n, T.Accent, 2, 0)
+    New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 0, 24), Font = Enum.Font.GothamBold, TextSize = 13, Text = title, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, n)
+    New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 32), Size = UDim2.new(1, -28, 0, 36), Font = Enum.Font.Gotham, TextSize = 11, Text = msg, TextColor3 = T.Muted, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true}, n)
+    table.insert(ActiveNotifs, n)
+    Tween(n, {Position = UDim2.fromOffset(0, (idx - 1) * 84)}, 0.3)
+    task.delay(dur or 3, function()
+      if not n.Parent then return end
+      local curY = n.Position.Y.Offset
+      Tween(n, {Position = UDim2.fromOffset(340, curY)}, 0.3)
+      task.wait(0.32)
+      for i, v in ipairs(ActiveNotifs) do if v == n then table.remove(ActiveNotifs, i) break end end
+      if n.Parent then n:Destroy() end
+      LayoutNotifs()
+    end)
+  end
+
   Window.Config = {
     Theme = "Thanh", Transparency = 8, Corner = 16, Language = "Tiếng Việt",
     Meteor = true, Particles = true, Shine = true, Beam = true, Blur = true,
     EffectSpeed = 100, MeteorDensity = 100, Notifications = true, AutoSave = true,
     Keybind = "RightShift"
   }
-  local function SaveConfig()
+  local LastSave = 0
+  local function SaveConfig(silent)
+    if silent and tick() - LastSave < 0.3 then return end
+    LastSave = tick()
     local ok, json = pcall(function() return HttpService:JSONEncode(Window.Config) end)
-    if ok then
-      if writefile then pcall(function() writefile("Thanh_Config.json", json) end) end
-      if Window.NotificationsEnabled then Window:Notify("THANH", "Đã lưu cấu hình!", 2) end
-    end
+    if ok and writefile then pcall(function() writefile("Thanh_Config.json", json) end) end
+    -- Lưu tự động thì KHÔNG hiện thông báo, chỉ khi bấm nút Lưu mới hiện
+    if not silent and Window.NotificationsEnabled then Window:Notify("THANH", "Đã lưu cấu hình!", 2) end
   end
-  local function MaybeSave() if Window.Config.AutoSave then SaveConfig() end end
+  local function MaybeSave() if Window.Config.AutoSave then SaveConfig(true) end end
 
   local function ApplyTheme(newT, name)
     T = newT Window.Theme = newT
@@ -231,7 +262,6 @@ function Thanh:CreateWindow(opts)
     if closeBtn then closeBtn.Position = UDim2.fromOffset(w - 44, 18) end
   end
 
-  -- Grip kéo giãn ở góc phải dưới
   local ResizeGrip = New("Frame", {AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -4, 1, -4), Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, ZIndex = 30, Active = true}, Surface)
   for i = 1, 3 do
     New("Frame", {Position = UDim2.fromOffset(8 + i * 4, 18 - i * 1), Size = UDim2.fromOffset(16 - i * 3, 2), BackgroundColor3 = T.Muted, BackgroundTransparency = 0.15, BorderSizePixel = 0, Rotation = -45, ZIndex = 31}, ResizeGrip)
@@ -262,6 +292,104 @@ function Thanh:CreateWindow(opts)
     Body.CanvasPosition = Vector2.new(0, 0)
   end
 
+  -- Hàm dùng chung để tạo Section cho cả Tab và Popup Cài đặt
+  local function AttachSectionMethods(sec, card, onGrow)
+    function sec:Grow(h)
+      self.Y += h
+      card.Size = UDim2.new(1, -4, 0, self.Y + 10)
+      if onGrow then onGrow(h) end
+    end
+    function sec:AddLabel(text)
+      local lb = New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 28), Font = Enum.Font.Gotham, TextSize = 12, Text = text, TextColor3 = T.Muted, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true}, card)
+      self:Grow(32)
+      return {Label = lb, Set = function(_, v) lb.Text = v end}
+    end
+    function sec:AddToggle(cfg)
+      local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 48)}, card)
+      New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, -70, 0, 26), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
+      if cfg.Desc then New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, -70, 0, 20), Font = Enum.Font.Gotham, TextSize = 11, Text = cfg.Desc, TextColor3 = T.Muted, TextXAlignment = Enum.TextXAlignment.Left}, row) end
+      local v = cfg.Default or false
+      local btn = New("TextButton", {Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 8), Size = UDim2.fromOffset(52, 28), BackgroundColor3 = v and T.Accent or T.Field, BorderSizePixel = 0}, row)
+      Corner(btn, 99) Stroke(btn, v and T.Accent or T.Muted, 1, 0.4)
+      local knob = New("Frame", {Position = UDim2.fromOffset(v and 26 or 3, 3), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0}, btn) Corner(knob, 99)
+      btn.Activated:Connect(function() v = not v Tween(btn, {BackgroundColor3 = v and T.Accent or T.Field}) Tween(knob, {Position = UDim2.fromOffset(v and 26 or 3, 3)}) Ripple(btn, 26, 14) if cfg.Callback then cfg.Callback(v) end end)
+      self:Grow(52)
+    end
+    function sec:AddSlider(cfg)
+      local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 56)}, card)
+      local valLbl = New("TextLabel", {BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(80, 24), Font = Enum.Font.GothamBold, TextSize = 13, Text = tostring(cfg.Default or cfg.Min), TextColor3 = T.Accent, TextXAlignment = Enum.TextXAlignment.Right}, row)
+      New("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -80, 0, 24), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
+      local track = New("TextButton", {Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 0, 22)}, row)
+      local bar = New("Frame", {Position = UDim2.fromOffset(0, 7), Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = T.Line, BackgroundTransparency = 0.4, BorderSizePixel = 0}, track) Corner(bar, 4)
+      local cur = cfg.Default or cfg.Min
+      local fill = New("Frame", {Size = UDim2.fromScale(math.clamp((cur - cfg.Min) / (cfg.Max - cfg.Min), 0, 1), 1), BackgroundColor3 = T.Accent, BorderSizePixel = 0}, bar) Corner(fill, 4)
+      local knob = New("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(math.clamp((cur - cfg.Min) / (cfg.Max - cfg.Min), 0, 1), 0.5), Size = UDim2.fromOffset(20, 20), BackgroundColor3 = T.Accent, BorderSizePixel = 0}, bar) Corner(knob, 99)
+      local dragging = false
+      local function SetFromX(x)
+        local a = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+        cur = math.floor(cfg.Min + a * (cfg.Max - cfg.Min) + 0.5)
+        fill.Size = UDim2.fromScale(a, 1) knob.Position = UDim2.fromScale(a, 0.5) valLbl.Text = tostring(cur)
+        if cfg.Callback then cfg.Callback(cur) end
+      end
+      track.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = true SetFromX(i.Position.X) end end)
+      UserInputService.InputChanged:Connect(function(i) if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then SetFromX(i.Position.X) end end)
+      UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
+      self:Grow(60)
+    end
+    function sec:AddButton(cfg)
+      local btn = New("TextButton", {Text = "", AutoButtonColor = false, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 44), BackgroundColor3 = T.Field, BackgroundTransparency = 0.35, BorderSizePixel = 0, ClipsDescendants = true}, card)
+      Corner(btn, 9) Stroke(btn, T.Line, 1, 0.3) AddShine(btn, 1.8)
+      New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6}, btn)
+      btn.Activated:Connect(function() Ripple(btn, btn.AbsoluteSize.X / 2, 22) if cfg.Callback then cfg.Callback() end end)
+      self:Grow(48)
+    end
+    function sec:AddDropdown(cfg)
+      local rowY = self.Y
+      local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, rowY), Size = UDim2.new(1, -28, 0, 44)}, card)
+      New("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -150, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
+      local btn = New("TextButton", {Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 2), Size = UDim2.fromOffset(140, 40), BackgroundColor3 = T.Field, BackgroundTransparency = 0.4, BorderSizePixel = 0, ClipsDescendants = true}, row)
+      Corner(btn, 8) Stroke(btn, T.Line, 1, 0.3)
+      local lbl = New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -36, 1, 0), Font = Enum.Font.Gotham, TextSize = 12, Text = cfg.Options[1] or "", TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, btn)
+      MakeIcon(btn, ICONS.Chevron, 112, 11, 18, T.Muted, 6)
+      local open = false
+      local list = New("Frame", {Position = UDim2.fromOffset(14, rowY + 48), Size = UDim2.new(1, -28, 0, 0), BackgroundColor3 = T.Field, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true, Visible = false, ZIndex = 20}, card)
+      Corner(list, 8) Stroke(list, T.Accent, 1.5, 0)
+      btn.Activated:Connect(function()
+        open = not open list.Visible = open Tween(list, {Size = UDim2.new(1, -28, 0, open and (#cfg.Options * 34 + 8) or 0)}, 0.2)
+        if open then
+          for _, c in ipairs(list:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+          for i, opt in ipairs(cfg.Options) do
+            local ob = New("TextButton", {Text = opt, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false, BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 4 + (i - 1) * 34), Size = UDim2.new(1, -12, 0, 30)}, list) Corner(ob, 6)
+            ob.Activated:Connect(function() lbl.Text = opt open = false list.Visible = false if cfg.Callback then cfg.Callback(opt) end end)
+          end
+        end
+      end)
+      self:Grow(48)
+    end
+    function sec:AddTextbox(cfg)
+      local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 44)}, card)
+      New("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -150, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
+      local box = New("TextBox", {PlaceholderText = cfg.Placeholder or "Nhập...", Text = "", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = T.Text, PlaceholderColor3 = T.Muted, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 2), Size = UDim2.fromOffset(150, 40), BackgroundColor3 = T.Field, BackgroundTransparency = 0.3, BorderSizePixel = 0, ClearTextOnFocus = false}, row)
+      Corner(box, 8) Stroke(box, T.Line, 1, 0.3)
+      box.FocusLost:Connect(function(enter) if enter and cfg.Callback then cfg.Callback(box.Text) end end)
+      self:Grow(48)
+    end
+    function sec:AddKeybind(cfg)
+      local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 44)}, card)
+      New("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -150, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
+      local key = cfg.Default or Enum.KeyCode.E
+      local btn = New("TextButton", {Text = key.Name, Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = T.Text, AutoButtonColor = false, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 2), Size = UDim2.fromOffset(110, 40), BackgroundColor3 = T.Field, BackgroundTransparency = 0.3, BorderSizePixel = 0}, row)
+      Corner(btn, 8) Stroke(btn, T.Line, 1, 0.3)
+      local waiting = false
+      btn.Activated:Connect(function() waiting = true btn.Text = "Nhấn phím..." end)
+      UserInputService.InputBegan:Connect(function(i, gp)
+        if waiting and i.UserInputType == Enum.UserInputType.Keyboard and not gp then key = i.KeyCode waiting = false btn.Text = key.Name if cfg.Callback then cfg.Callback(key) end end
+      end)
+      self:Grow(48)
+    end
+    return sec
+  end
+
   function Window:CreateTab(name, iconId)
     local btn = New("TextButton", {Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(142, 40), BorderSizePixel = 0}, Sidebar)
     Corner(btn, 9)
@@ -280,109 +408,71 @@ function Thanh:CreateWindow(opts)
       New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 0, 30), Font = Enum.Font.GothamBold, TextSize = 15, Text = title, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, card)
       New("Frame", {Position = UDim2.fromOffset(14, 44), Size = UDim2.new(1, -28, 0, 1), BackgroundColor3 = T.Line, BackgroundTransparency = 0.5, BorderSizePixel = 0}, card)
       local sec = {Card = card, Y = 54, ParentTab = self}
-      function sec:Grow(h) self.Y += h card.Size = UDim2.new(1, -4, 0, self.Y + 10) self.ParentTab.Y += h + 8 end
-      function sec:AddLabel(text)
-        local lb = New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 28), Font = Enum.Font.Gotham, TextSize = 12, Text = text, TextColor3 = T.Muted, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true}, card)
-        self:Grow(32)
-        return {Label = lb, Set = function(_, v) lb.Text = v end}
-      end
-      function sec:AddToggle(cfg)
-        local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 48)}, card)
-        New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, -70, 0, 26), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
-        if cfg.Desc then New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, -70, 0, 20), Font = Enum.Font.Gotham, TextSize = 11, Text = cfg.Desc, TextColor3 = T.Muted, TextXAlignment = Enum.TextXAlignment.Left}, row) end
-        local v = cfg.Default or false
-        local btn = New("TextButton", {Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 8), Size = UDim2.fromOffset(52, 28), BackgroundColor3 = v and T.Accent or T.Field, BorderSizePixel = 0}, row)
-        Corner(btn, 99) Stroke(btn, v and T.Accent or T.Muted, 1, 0.4)
-        local knob = New("Frame", {Position = UDim2.fromOffset(v and 26 or 3, 3), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0}, btn) Corner(knob, 99)
-        btn.Activated:Connect(function() v = not v Tween(btn, {BackgroundColor3 = v and T.Accent or T.Field}) Tween(knob, {Position = UDim2.fromOffset(v and 26 or 3, 3)}) Ripple(btn, 26, 14) if cfg.Callback then cfg.Callback(v) end end)
-        self:Grow(52)
-      end
-      function sec:AddSlider(cfg)
-        local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 56)}, card)
-        local valLbl = New("TextLabel", {BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(80, 24), Font = Enum.Font.GothamBold, TextSize = 13, Text = tostring(cfg.Default or cfg.Min), TextColor3 = T.Accent, TextXAlignment = Enum.TextXAlignment.Right}, row)
-        New("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -80, 0, 24), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
-        local track = New("TextButton", {Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 0, 22)}, row)
-        local bar = New("Frame", {Position = UDim2.fromOffset(0, 7), Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = T.Line, BackgroundTransparency = 0.4, BorderSizePixel = 0}, track) Corner(bar, 4)
-        local cur = cfg.Default or cfg.Min
-        local fill = New("Frame", {Size = UDim2.fromScale(math.clamp((cur - cfg.Min) / (cfg.Max - cfg.Min), 0, 1), 1), BackgroundColor3 = T.Accent, BorderSizePixel = 0}, bar) Corner(fill, 4)
-        local knob = New("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(math.clamp((cur - cfg.Min) / (cfg.Max - cfg.Min), 0, 1), 0.5), Size = UDim2.fromOffset(20, 20), BackgroundColor3 = T.Accent, BorderSizePixel = 0}, bar) Corner(knob, 99)
-        local dragging = false
-        local function SetFromX(x)
-          local a = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-          cur = math.floor(cfg.Min + a * (cfg.Max - cfg.Min) + 0.5)
-          fill.Size = UDim2.fromScale(a, 1) knob.Position = UDim2.fromScale(a, 0.5) valLbl.Text = tostring(cur)
-          if cfg.Callback then cfg.Callback(cur) end
-        end
-        track.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = true SetFromX(i.Position.X) end end)
-        UserInputService.InputChanged:Connect(function(i) if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then SetFromX(i.Position.X) end end)
-        UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
-        self:Grow(60)
-      end
-      function sec:AddButton(cfg)
-        local btn = New("TextButton", {Text = "", AutoButtonColor = false, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 44), BackgroundColor3 = T.Field, BackgroundTransparency = 0.35, BorderSizePixel = 0, ClipsDescendants = true}, card)
-        Corner(btn, 9) Stroke(btn, T.Line, 1, 0.3) AddShine(btn, 1.8)
-        New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6}, btn)
-        btn.Activated:Connect(function() Ripple(btn, btn.AbsoluteSize.X / 2, 22) if cfg.Callback then cfg.Callback() end end)
-        self:Grow(48)
-      end
-      function sec:AddDropdown(cfg)
-        local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 44)}, card)
-        New("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -150, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
-        local btn = New("TextButton", {Text = "", AutoButtonColor = false, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 2), Size = UDim2.fromOffset(140, 40), BackgroundColor3 = T.Field, BackgroundTransparency = 0.4, BorderSizePixel = 0, ClipsDescendants = true}, row)
-        Corner(btn, 8) Stroke(btn, T.Line, 1, 0.3)
-        local lbl = New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -36, 1, 0), Font = Enum.Font.Gotham, TextSize = 12, Text = cfg.Options[1] or "", TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, btn)
-        MakeIcon(btn, ICONS.Chevron, 112, 11, 18, T.Muted, 6)
-        local open = false
-        local list = New("Frame", {Position = UDim2.fromOffset(14, self.Y + 48), Size = UDim2.new(1, -28, 0, 0), BackgroundColor3 = T.Field, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true, Visible = false, ZIndex = 20}, card)
-        Corner(list, 8) Stroke(list, T.Accent, 1.5, 0)
-        btn.Activated:Connect(function()
-          open = not open list.Visible = open Tween(list, {Size = UDim2.new(1, -28, 0, open and (#cfg.Options * 34 + 8) or 0)}, 0.2)
-          if open then
-            for _, c in ipairs(list:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
-            for i, opt in ipairs(cfg.Options) do
-              local ob = New("TextButton", {Text = opt, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false, BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 4 + (i - 1) * 34), Size = UDim2.new(1, -12, 0, 30)}, list) Corner(ob, 6)
-              ob.Activated:Connect(function() lbl.Text = opt open = false list.Visible = false if cfg.Callback then cfg.Callback(opt) end end)
-            end
-          end
-        end)
-        self:Grow(48)
-      end
-      function sec:AddTextbox(cfg)
-        local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 44)}, card)
-        New("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -150, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
-        local box = New("TextBox", {PlaceholderText = cfg.Placeholder or "Nhập...", Text = "", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = T.Text, PlaceholderColor3 = T.Muted, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 2), Size = UDim2.fromOffset(150, 40), BackgroundColor3 = T.Field, BackgroundTransparency = 0.3, BorderSizePixel = 0, ClearTextOnFocus = false}, row)
-        Corner(box, 8) Stroke(box, T.Line, 1, 0.3)
-        box.FocusLost:Connect(function(enter) if enter and cfg.Callback then cfg.Callback(box.Text) end end)
-        self:Grow(48)
-      end
-      function sec:AddKeybind(cfg)
-        local row = New("Frame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, self.Y), Size = UDim2.new(1, -28, 0, 44)}, card)
-        New("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -150, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, Text = cfg.Name, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
-        local key = cfg.Default or Enum.KeyCode.E
-        local btn = New("TextButton", {Text = key.Name, Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = T.Text, AutoButtonColor = false, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 2), Size = UDim2.fromOffset(110, 40), BackgroundColor3 = T.Field, BackgroundTransparency = 0.3, BorderSizePixel = 0}, row)
-        Corner(btn, 8) Stroke(btn, T.Line, 1, 0.3)
-        local waiting = false
-        btn.Activated:Connect(function() waiting = true btn.Text = "Nhấn phím..." end)
-        UserInputService.InputBegan:Connect(function(i, gp)
-          if waiting and i.UserInputType == Enum.UserInputType.Keyboard and not gp then key = i.KeyCode waiting = false btn.Text = key.Name if cfg.Callback then cfg.Callback(key) end end
-        end)
-        self:Grow(48)
-      end
+      self.Y += 72
+      local function onGrow(h) self.Y += h end
+      AttachSectionMethods(sec, card, onGrow)
       return sec
     end
     return tab
   end
 
-  -- ===== TAB CÀI ĐẶT SIÊU ĐẦY ĐỦ, CÓ SẴN TRONG UI =====
-  local function BuildFullSettings()
-    local SetTab = Window:CreateTab("Cài đặt", ICONS.Settings)
-    local Sec1 = SetTab:CreateSection("Giao diện")
+  -- ===== CÀI ĐẶT LÀ Ô POPUP RIÊNG, KHÔNG NẰM TRONG TAB =====
+  local SettingsOpen = false
+  local SettingsOverlay = New("TextButton", {Text = "", AutoButtonColor = false, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false, ZIndex = 100}, Gui)
+  local SettingsPanel = New("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(420, 480), BackgroundColor3 = T.Bg, BackgroundTransparency = 0.02, BorderSizePixel = 0, ClipsDescendants = true, Visible = false, ZIndex = 101}, Gui)
+  Corner(SettingsPanel, 16) Stroke(SettingsPanel, T.Accent, 1.5, 0.1)
+  local SettingsHeader = New("Frame", {BackgroundTransparency = 1, Size = UDim2.fromOffset(420, 62), ZIndex = 102, Active = true}, SettingsPanel)
+  AddShine(SettingsHeader, 2.8)
+  New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(18, 10), Size = UDim2.fromOffset(300, 28), Font = Enum.Font.GothamBlack, TextSize = 20, Text = "Cài đặt", TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 103}, SettingsHeader)
+  New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(18, 36), Size = UDim2.fromOffset(300, 18), Font = Enum.Font.Gotham, TextSize = 11, Text = "Tùy chỉnh giao diện và hiệu ứng", TextColor3 = T.Muted, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 103}, SettingsHeader)
+  local SettingsCloseBtn = New("TextButton", {Text = "", AutoButtonColor = false, Position = UDim2.fromOffset(372, 12), Size = UDim2.fromOffset(36, 36), BackgroundColor3 = T.Field, BackgroundTransparency = 0.4, BorderSizePixel = 0, ZIndex = 104}, SettingsHeader)
+  Corner(SettingsCloseBtn, 10) Stroke(SettingsCloseBtn, T.Line, 1, 0.3)
+  MakeIcon(SettingsCloseBtn, ICONS.Close, 9, 9, 18, T.Text, 105)
+  local PopupBody = New("ScrollingFrame", {BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 66), Size = UDim2.new(1, -24, 1, -78), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 5, ScrollBarImageColor3 = T.Accent, ZIndex = 102}, SettingsPanel)
+
+  local function ToggleSettings()
+    SettingsOpen = not SettingsOpen
+    SettingsPanel.Visible = SettingsOpen
+    SettingsOverlay.Visible = SettingsOpen
+    if SettingsOpen then
+      SettingsOverlay.BackgroundTransparency = 1
+      Tween(SettingsOverlay, {BackgroundTransparency = 0.55}, 0.25)
+      SettingsPanel.Size = UDim2.fromOffset(380, 430)
+      SettingsPanel.Position = UDim2.fromScale(0.5, 0.52)
+      Tween(SettingsPanel, {Size = UDim2.fromOffset(420, 480)}, 0.25)
+      Tween(SettingsPanel, {Position = UDim2.fromScale(0.5, 0.5)}, 0.25)
+    end
+  end
+  SettingsOverlay.Activated:Connect(function() if SettingsOpen then ToggleSettings() end end)
+  SettingsCloseBtn.Activated:Connect(function() if SettingsOpen then ToggleSettings() end end)
+  -- Kéo ô Cài đặt
+  local sDragging, sDragStart, sStartPos
+  SettingsHeader.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then sDragging = i sDragStart = Vector2.new(i.Position.X, i.Position.Y) sStartPos = Vector2.new(SettingsPanel.Position.X.Offset, SettingsPanel.Position.Y.Offset) end end)
+  UserInputService.InputChanged:Connect(function(i) if sDragging and i == sDragging then local d = Vector2.new(i.Position.X, i.Position.Y) - sDragStart SettingsPanel.Position = UDim2.fromOffset(sStartPos.X + d.X, sStartPos.Y + d.Y) end end)
+  UserInputService.InputEnded:Connect(function(i) if i == sDragging then sDragging = nil end end)
+
+  local PopupY = {v = 0}
+  local function CreatePopupSection(title)
+    local card = New("Frame", {Position = UDim2.fromOffset(0, PopupY.v), Size = UDim2.new(1, -4, 0, 64), BackgroundColor3 = T.Card, BackgroundTransparency = 0.35, BorderSizePixel = 0, ClipsDescendants = true}, PopupBody)
+    Corner(card, 12) Stroke(card, T.Line, 1, 0.35)
+    New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 0, 30), Font = Enum.Font.GothamBold, TextSize = 15, Text = title, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, card)
+    New("Frame", {Position = UDim2.fromOffset(14, 44), Size = UDim2.new(1, -28, 0, 1), BackgroundColor3 = T.Line, BackgroundTransparency = 0.5, BorderSizePixel = 0}, card)
+    local sec = {Card = card, Y = 54}
+    PopupY.v += 72
+    local function onGrow(h) PopupY.v += h end
+    AttachSectionMethods(sec, card, onGrow)
+    return sec
+  end
+
+  -- Nội dung bên trong ô Cài đặt
+  local function BuildSettingsPopup()
+    local Sec1 = CreatePopupSection("Giao diện")
     Sec1:AddDropdown({Name = "Chủ đề", Options = {"Thanh", "Violet", "Ember", "Mint", "Hong"}, Callback = function(v) if THEMES[v] then ApplyTheme(THEMES[v], v) Window:Notify("THANH", "Đã đổi chủ đề: " .. v, 2) end end})
     Sec1:AddSlider({Name = "Độ trong suốt", Min = 0, Max = 60, Default = 8, Callback = function(v) Window.Config.Transparency = v Surface.BackgroundTransparency = v / 100 Sidebar.BackgroundTransparency = 0.25 + v / 200 MaybeSave() end})
     Sec1:AddSlider({Name = "Độ bo góc", Min = 0, Max = 24, Default = 16, Callback = function(v) Window.Config.Corner = v SurfaceCorner.CornerRadius = UDim.new(0, v) ContentCorner.CornerRadius = UDim.new(0, v) MaybeSave() end})
     Sec1:AddDropdown({Name = "Ngôn ngữ", Options = {"Tiếng Việt", "English"}, Callback = function(v) Window.Config.Language = v MaybeSave() Window:Notify("THANH", "Ngôn ngữ: " .. v, 2) end})
 
-    local Sec2 = SetTab:CreateSection("Hiệu ứng")
+    local Sec2 = CreatePopupSection("Hiệu ứng")
     Sec2:AddToggle({Name = "Thiên thạch rơi", Desc = "Bật / tắt thiên thạch", Default = true, Callback = function(v) Window.Config.Meteor = v MeteorLayer.Visible = v MaybeSave() end})
     Sec2:AddToggle({Name = "Hạt nổi", Desc = "Bật / tắt hạt nổi bay", Default = true, Callback = function(v) Window.Config.Particles = v ParticleLayer.Visible = v MaybeSave() end})
     Sec2:AddToggle({Name = "Tia sáng quét", Desc = "Bật / tắt tia sáng header", Default = true, Callback = function(v) Window.Config.Shine = v HeaderShine.Visible = v MaybeSave() end})
@@ -391,32 +481,22 @@ function Thanh:CreateWindow(opts)
     Sec2:AddSlider({Name = "Tốc độ hiệu ứng", Min = 50, Max = 250, Default = 100, Callback = function(v) Window.Config.EffectSpeed = v EffectSpeed = v / 100 MaybeSave() end})
     Sec2:AddSlider({Name = "Mật độ thiên thạch", Min = 10, Max = 200, Default = 100, Callback = function(v) Window.Config.MeteorDensity = v MeteorDensity = v / 100 MaybeSave() end})
 
-    local Sec3 = SetTab:CreateSection("Điều khiển")
+    local Sec3 = CreatePopupSection("Điều khiển")
     Sec3:AddKeybind({Name = "Phím mở / đóng UI", Default = Enum.KeyCode.RightShift, Callback = function(k) Window.Config.Keybind = k.Name opts.Keybind = k Window:Notify("THANH", "Phím mới: " .. k.Name, 2) MaybeSave() end})
     Sec3:AddToggle({Name = "Thông báo", Desc = "Bật / tắt thông báo", Default = true, Callback = function(v) Window.Config.Notifications = v Window.NotificationsEnabled = v MaybeSave() end})
     Sec3:AddToggle({Name = "Tự động lưu cấu hình", Desc = "Lưu ngay khi đổi cài đặt", Default = true, Callback = function(v) Window.Config.AutoSave = v MaybeSave() end})
     Sec3:AddButton({Name = "Đặt lại vị trí Launcher", Callback = function() if Launcher then Launcher.Position = UDim2.fromOffset(20, 20) end Window:Notify("THANH", "Đã đặt lại vị trí Launcher", 2) end})
 
-    local Sec4 = SetTab:CreateSection("Hệ thống")
-    Sec4:AddLabel("Phiên bản: THANH UI v2.0 | Tác giả: Thanh")
+    local Sec4 = CreatePopupSection("Hệ thống")
+    Sec4:AddLabel("Phiên bản: THANH UI v2.1 | Tác giả: Thanh")
     local fpsObj = Sec4:AddLabel("FPS: ... | Ping: ... | Thời gian chạy: 0s")
     FpsLabel = fpsObj
     Sec4:AddButton({Name = "Chế độ gọn / Đầy đủ", Callback = function() Window.Compact = not Window.Compact if Window.Compact then ApplySize(520, 360) else ApplySize(720, 470) end end})
-    Sec4:AddButton({Name = "Lưu cấu hình ngay", Callback = function() SaveConfig() end})
+    Sec4:AddButton({Name = "Lưu cấu hình ngay", Callback = function() SaveConfig(false) end})
     Sec4:AddButton({Name = "Đặt lại mặc định", Callback = function() ApplyTheme(THEMES.Thanh, "Thanh") Surface.BackgroundTransparency = 0.08 EffectSpeed = 1 MeteorDensity = 1 MeteorLayer.Visible = true ParticleLayer.Visible = true HeaderShine.Visible = true BeamGroup.Visible = true Blur.Enabled = true ApplySize(720, 470) Window:Notify("THANH", "Đã đặt lại mặc định!", 2) end})
-    Sec4:AddButton({Name = "Đóng UI", Callback = function() Window:SetOpen(false) end})
+    Sec4:AddButton({Name = "Đóng UI", Callback = function() if SettingsOpen then ToggleSettings() end Window:SetOpen(false) end})
   end
-
-  local NotifHolder = New("Frame", {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(320, 600), BackgroundTransparency = 1, ZIndex = 250}, Gui)
-  function Window:Notify(title, msg, dur)
-    if not Window.NotificationsEnabled then return end
-    local n = New("Frame", {Position = UDim2.fromOffset(340, 0), Size = UDim2.fromOffset(320, 76), BackgroundColor3 = T.Card, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true}, NotifHolder)
-    Corner(n, 10) Stroke(n, T.Accent, 2, 0)
-    New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 0, 24), Font = Enum.Font.GothamBold, TextSize = 13, Text = title, TextColor3 = T.Text, TextXAlignment = Enum.TextXAlignment.Left}, n)
-    New("TextLabel", {BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 32), Size = UDim2.new(1, -28, 0, 36), Font = Enum.Font.Gotham, TextSize = 11, Text = msg, TextColor3 = T.Muted, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true}, n)
-    Tween(n, {Position = UDim2.fromOffset(0, 0)}, 0.3)
-    task.delay(dur or 3, function() Tween(n, {Position = UDim2.fromOffset(340, 0)}, 0.3) task.wait(0.35) n:Destroy() end)
-  end
+  BuildSettingsPopup()
 
   local Launcher = New("ImageButton", {Name = "Launcher", Position = UDim2.fromOffset(20, 20), Size = UDim2.fromOffset(54, 54), BackgroundColor3 = Color3.fromRGB(4, 10, 28), BorderSizePixel = 0, AutoButtonColor = false, Visible = false, ZIndex = 50}, Gui)
   Corner(Launcher, 999)
@@ -426,17 +506,16 @@ function Thanh:CreateWindow(opts)
 
   function Window:SetOpen(v)
     Window.Open = v Root.Visible = v Launcher.Visible = not v
+    if not v and SettingsOpen then ToggleSettings() end
     Tween(Blur, {Size = v and 18 or 0}, 0.25)
     if v then Tween(Content, {Size = UDim2.fromOffset(curW, curH)}, 0.25) end
   end
+  function Window:ToggleSettings() ToggleSettings() end
 
   -- 3 nút trên header: Cài đặt | Ẩn | Đóng, Cài đặt nằm ngay cạnh nút Ẩn
-  settingsBtn = TopBtn(WW - 132, ICONS.Settings, function()
-    local setTab = Window.Tabs["Cài đặt"]
-    if setTab then SelectTab(setTab) end
-  end)
-  minBtn = TopBtn(WW - 88, ICONS.Minimize, function() Window:SetOpen(false) end)
-  closeBtn = TopBtn(WW - 44, ICONS.Close, function() Window:SetOpen(false) end)
+  settingsBtn = TopBtn(Header, WW - 132, ICONS.Settings, function() ToggleSettings() end)
+  minBtn = TopBtn(Header, WW - 88, ICONS.Minimize, function() Window:SetOpen(false) end)
+  closeBtn = TopBtn(Header, WW - 44, ICONS.Close, function() Window:SetOpen(false) end)
   ApplySize(curW, curH)
   Launcher.Activated:Connect(function() Window:SetOpen(true) end)
 
@@ -449,9 +528,6 @@ function Thanh:CreateWindow(opts)
   UserInputService.InputChanged:Connect(function(i) if lDrag and i == lDrag then local d = Vector2.new(i.Position.X, i.Position.Y) - lStart Launcher.Position = UDim2.fromOffset(math.clamp(lPos.X + d.X, 0, 1200), math.clamp(lPos.Y + d.Y, 0, 700)) end end)
   UserInputService.InputEnded:Connect(function(i) if i == lDrag then lDrag = nil end end)
   UserInputService.InputBegan:Connect(function(i, gp) if not gp and i.KeyCode == (opts.Keybind or Enum.KeyCode.RightShift) then Window:SetOpen(not Window.Open) end end)
-
-  -- Tự tạo sẵn tab Cài đặt, không cần gọi thêm
-  BuildFullSettings()
 
   local t = 0 local fpsAcc, fpsCount, fpsVal = 0, 0, 60
   RunService.RenderStepped:Connect(function(dt)
